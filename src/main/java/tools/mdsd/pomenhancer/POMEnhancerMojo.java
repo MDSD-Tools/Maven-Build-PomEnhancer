@@ -141,8 +141,9 @@ public class POMEnhancerMojo
                     fieldName, target.getClass().getName()), e);
         }
 
-        boolean isPresent = cand != null &&
-                ((!(cand instanceof Collection<?>) || ((Collection<?>) cand).isEmpty()));
+        boolean isPresent = (cand != null &&
+                (!(cand instanceof Collection<?>)
+                        || !((Collection<?>) cand).isEmpty()));
         if (skipExisting && isPresent) {
             getLog().debug(String.format("Skipping existing entry for \"%s\": %s", fieldName, cand.toString()));
             return false;
@@ -162,10 +163,28 @@ public class POMEnhancerMojo
             } else {
                 getLog().warn(msg);
             }
-
             return false;
         }
 
+        if (entity instanceof Collection && cand != null) {
+            Collection targetEntity = (Collection) cand;
+            for (Object obj: ((Collection) entity)) {
+                targetEntity.add(clone(obj));
+            }
+        } else {
+            Object newEntity = clone(entity);
+            getLog().debug(String.format("Setting %s in %s", entity.toString(), target.toString()));
+            try {
+                setterMethod.invoke(target, newEntity);
+            } catch (IllegalAccessException | InvocationTargetException e) {
+                throw new MojoExecutionException(String.format("Could not invoke setter of field %s with value %s for %s",
+                        fieldName, newEntity.toString(), target.getClass().getName()), e);
+            }
+        }
+        return true;
+    }
+
+    private Object clone (Object entity) throws MojoExecutionException {
         Object newEntity = entity;
         if (!(entity instanceof String || ClassUtils.isPrimitiveOrWrapper(entity.getClass()))) {
             try {
@@ -175,15 +194,7 @@ public class POMEnhancerMojo
                 throw new MojoExecutionException("Uncloneable model artifact encountered. This should not occur.", e);
             }
         }
-
-        getLog().debug(String.format("Setting %s in %s", entity.toString(), target.toString()));
-        try {
-            setterMethod.invoke(target, newEntity);
-        } catch (IllegalAccessException | InvocationTargetException e) {
-            throw new MojoExecutionException(String.format("Could not invoke setter of field %s with value %s for %s",
-                    fieldName, newEntity.toString(), target.getClass().getName()), e);
-        }
-        return true;
+        return newEntity;
     }
 
     private void saveModelToPath(Model model, Path path) throws MojoExecutionException {
